@@ -1,5 +1,8 @@
+# app/api/endpoints/ai_document.py
+
+
 from pydantic import BaseModel, Field
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, logger
 from datetime import datetime, timezone
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -15,34 +18,40 @@ def now_utc():
     return datetime.now(timezone.utc)
 
 
-router = APIRouter(prefix="/organization-knowledge", tags=["Organization Knowledge Base"])
+router = APIRouter(prefix="/service-knowledge", tags=["service Knowledge Base"])
 
 
 @router.post("/knowledge-base/file", response_model=KnowledgeBaseFileResponse)
 async def create_knowledge_base_file(
     file: UploadFile = File(...),
-    organizationId: str = Form(..., description="MongoDB ObjectId of the organization"),
+    serviceId: str = Form(..., description="MongoDB ObjectId of the service"),
     db=Depends(get_database),
 ):
-    """
-    Upload a knowledge base document and store metadata in MongoDB
-    linked to an organization by ID.
-    """
-    # Validate organizationId
-    if not organizationId:
-        raise HTTPException(status_code=400, detail="organizationId is required")
-    try:
-        if not ObjectId.is_valid(organizationId):
-            raise HTTPException(status_code=400, detail="Invalid organizationId format. Must be a 24-character hexadecimal string.")
-        organization = await db.organizations.find_one({"_id": ObjectId(organizationId)})
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="Invalid organizationId format. Must be a 24-character hexadecimal string.")
-    
-    if not organization:
-        raise HTTPException(status_code=404, detail="Organization not found")
 
-    business_name = organization.get("name")
-    name = business_name + " Knowledge Base"
+    # Validate serviceId
+    if not serviceId:
+        raise HTTPException(status_code=400, detail="serviceId is required")
+    try:
+        if not ObjectId.is_valid(serviceId):
+            raise HTTPException(status_code=400, detail="Invalid serviceId format. Must be a 24-character hexadecimal string.")
+        service = await db.services.find_one({"_id": ObjectId(serviceId)})
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid serviceId format. Must be a 24-character hexadecimal string.")
+    
+    if not service:
+        raise HTTPException(status_code=404, detail="service not found")
+
+
+    knowledgeBaseExists = await db.AiknowledgeBase.find_one({"serviceId":ObjectId(serviceId)})
+    # print(f"\n knowledge base existence check: {knowledgeBaseExists}\n")
+
+    if knowledgeBaseExists is not None:
+        # print(f"\n knowledge base for this {knowledgeBaseExists.get("serviceId")} already exists. Deleting the previous one\n")
+        await db.AiknowledgeBase.delete_one({"serviceId": ObjectId(serviceId)})
+        delete_knowledge_base_file(knowledgeBaseExists.get("knowledgeBaseId"))
+    
+    service_name = service.get("serviceName")
+    name = service_name + " Knowledge Base"
 
     # Upload file to ElevenLabs API
     API_KEY = settings.ELEVENLABS_API_KEY
@@ -60,7 +69,7 @@ async def create_knowledge_base_file(
 
     # Prepare KB record for MongoDB
     kb_record = {
-        "organizationId": organizationId,
+        "serviceId": ObjectId(serviceId),
         "knowledgeBaseId": kb_data["id"],
         "knowledgeBaseName": kb_data["name"],
         "fileName": file.filename,
@@ -76,7 +85,6 @@ async def create_knowledge_base_file(
         "knowledgeBaseId": kb_data["id"],
         "knowledgeBaseName": kb_data["name"],
     }
-
 
 @router.delete("/knowledge-base/{knowledge_base_id}")
 async def delete_knowledge_base_file(
@@ -96,7 +104,7 @@ async def delete_knowledge_base_file(
     if not kb_doc:
         raise HTTPException(status_code=404, detail="Knowledge base document not found")
 
-    organization_id = kb_doc.get("organizationId")
+    service_id = kb_doc.get("serviceId")
     knowledge_base_name = kb_doc.get("knowledgeBaseName")
     file_name = kb_doc.get("fileName")
 
@@ -114,16 +122,16 @@ async def delete_knowledge_base_file(
             # ElevenLabs may return 200 or 204 for success
             if response.status_code not in [200, 204]:
                 # Log warning, but don't fail the request
-                print(f"Warning: ElevenLabs delete failed: {response.status_code} {response.text}")
+                logger.info(f"Warning: ElevenLabs delete failed: {response.status_code} {response.text}")
     except Exception as e:
-        print(f"Warning: Exception when deleting from ElevenLabs: {e}")
+        logger.info(f"Warning: Exception when deleting from ElevenLabs: {e}")
 
     # 3️⃣ Return JSON response
     return JSONResponse(
         status_code=200,
         content={
             "message": "Knowledge base document deleted successfully",
-            "organizationId": organization_id,
+            "serviceId": service_id,
             "knowledgeBaseId": knowledge_base_id,
             "knowledgeBaseName": knowledge_base_name,
             "fileName": file_name,
@@ -132,25 +140,25 @@ async def delete_knowledge_base_file(
     )
 
 
-@router.get("/knowledge-base/{organization_id}")
+@router.get("/knowledge-base/{service_id}")
 async def get_knowledge_base_list(
-    organization_id: str,
+    service_id: str,
     db=Depends(get_database)
 ):
     """
-    Get all knowledge base documents for a specific organization.
+    Get all knowledge base documents for a specific service.
     Returns a list of knowledge base files with their metadata.
     """
 
-    # Find all KB documents for the organization
-    kb_docs = await db.AiknowledgeBase.find({"organizationId": organization_id}).to_list(length=1000)
+    # Find all KB documents for the service
+    kb_docs = await db.AiknowledgeBase.find({"serviceId": service_id}).to_list(length=1000)
     
     if not kb_docs:
         return JSONResponse(
             status_code=200,
             content={
-                "message": "No knowledge base documents found for this organization",
-                "organizationId": organization_id,
+                "message": "No knowledge base documents found for this service",
+                "serviceId": service_id,
                 "knowledgeBaseList": []
             }
         )
@@ -169,7 +177,9 @@ async def get_knowledge_base_list(
     return JSONResponse(
         status_code=200,
         content={
-            "organizationId": organization_id,
+            "serviceId": service_id,
             "knowledgeBaseList": knowledge_base_list
         }
     )
+
+

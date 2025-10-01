@@ -1,33 +1,33 @@
+#app/services/elevenlabs.py
+
 import httpx
 import os
 from app.core.config import settings
 ELEVEN_API_KEY = settings.ELEVENLABS_API_KEY
 
 async def create_eleven_agent(payload: dict):
-    url = "https://api.elevenlabs.io/v1/convai/agents/create"  # <-- correct endpoint
+    url = "https://api.elevenlabs.io/v1/convai/agents/create"
     headers = {
         "xi-api-key": ELEVEN_API_KEY,
         "Content-Type": "application/json"
     }
+
+    # print(f"Sending POST to {url} with payload: {payload}")
+    # print(f"Headers: {headers}")
+
     async with httpx.AsyncClient() as client:
         resp = await client.post(url, headers=headers, json=payload)
-        resp.raise_for_status()
+
+        print(f"Status code: {resp.status_code}")
+        print(f"Response text: {resp.text}")
         return resp.json()
 
 
 
 
-async def update_eleven_agent(agent_id: str, partial_payload: dict) -> dict:
-    """
-    Partially updates an existing agent in ElevenLabs using the PATCH method.
-    
-    Args:
-        agent_id: The ID of the agent to update.
-        partial_payload: A dictionary containing only the fields to be changed.
 
-    Returns:
-        The JSON response from the ElevenLabs API.
-    """
+async def update_eleven_agent(agent_id: str, partial_payload: dict) -> dict:
+
     if not ELEVEN_API_KEY:
         raise ValueError("ELEVENLABS_API_KEY is not set in environment variables.")
 

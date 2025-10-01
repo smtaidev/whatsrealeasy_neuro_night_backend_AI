@@ -1,3 +1,6 @@
+#inbound_service/main.py
+
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -8,18 +11,13 @@ from twilio.rest import Client as TwilioClient
 import json
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
-from app.api.models.ai_agent_model import Call, Agent, Organization, AIAgent, AICallLog
+from app.api.models.ai_agent_model import AIAgent, AICallLog
 
 from app.core.config import settings
 from app.core.redis_manager import RedisManager
 from app.core.database_manager import DatabaseManager
-from app.core.websocket_manager import WebSocketManager
-from app.api.endpoints import call_routing
-from app.core.metrics import update_metrics, get_metrics
-from app.api.endpoints.real_agent_transfering_call import router
 from app.services.shared_state import SharedState
-from app.api.endpoints import ai_document
-from app.api.endpoints import ai_voice
+from app.api.endpoints import ai_document, server_tools
 from app.api.endpoints import connect_ai_agent_with_twilio
 from app.api.endpoints import ai_agent
 from app.api.endpoints import ai_call_log_webhook
@@ -54,9 +52,6 @@ async def lifespan(app: FastAPI):
         shared_state.db_manager = DatabaseManager(settings.MONGODB_URL)
         await shared_state.db_manager.initialize()
         
-        shared_state.websocket_manager = WebSocketManager(shared_state.redis_manager)
-        await shared_state.websocket_manager.start_message_listener()
-        
         # Initialize Twilio client
         shared_state.twilio_client = TwilioClient(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
         
@@ -67,7 +62,6 @@ async def lifespan(app: FastAPI):
         app.state.shared_state = shared_state
         
         # Start background tasks
-        asyncio.create_task(metrics_updater(shared_state))
         asyncio.create_task(health_monitor(shared_state))
         
         logger.info(f"Application started successfully on instance {settings.INSTANCE_ID}")
@@ -76,8 +70,8 @@ async def lifespan(app: FastAPI):
         # Initialize Beanie with all document models
         await init_beanie(
             database=client.get_database(settings.MONGO_DB_NAME),
-            document_models=[Call, Agent, Organization, AIAgent, AICallLog],
-            allow_index_dropping=True
+            document_models=[AIAgent, AICallLog]
+            # allow_index_dropping=True
         )
         logger.info("Beanie initialized with Call, Agent, Organization, AIAgent, and AICallLog models")
         
@@ -98,15 +92,6 @@ async def lifespan(app: FastAPI):
     
     logger.info("Application shutdown complete")
 
-async def metrics_updater(shared_state: SharedState):
-    """Periodically update metrics"""
-    while True:
-        try:
-            await update_metrics(shared_state.redis_manager)
-            await asyncio.sleep(60)
-        except Exception as e:
-            logger.error(f"Metrics update failed: {e}")
-            await asyncio.sleep(120)
 
 async def health_monitor(shared_state: SharedState):
     """Monitor backend health and update status"""
@@ -119,8 +104,6 @@ async def health_monitor(shared_state: SharedState):
             # Check MongoDB connection
             await shared_state.db_manager.client.admin.command('ping')
             
-            # Check available agents
-            agent_count = await shared_state.redis_manager.redis_client.scard("agents:free:global")
             
             # Update health status
             shared_state.health_status.backend_healthy = True
@@ -134,13 +117,10 @@ async def health_monitor(shared_state: SharedState):
                 json.dumps({
                     "healthy": True,
                     "timestamp": shared_state.health_status.last_health_check.isoformat(),
-                    "available_agents": agent_count,
                     "instance_id": settings.INSTANCE_ID
                 })
             )
-            
-            logger.debug(f"Health check passed - Available agents: {agent_count}")
-            
+                        
         except Exception as e:
             shared_state.health_status.consecutive_failures += 1
             logger.error(f"Health check failed: {e}")
@@ -161,13 +141,11 @@ app = FastAPI(
 
 @app.get("/")
 def home():
-    # It's common practice for APIs to return JSON responses.
-    # FastAPI automatically converts Python dicts to JSON.
     return {"message": "AI Server is ready to run...."}
 
 # CORS middleware
 origins = [
-    "http://localhost:3000",
+    "*","http://localhost:3000",
     # Add any other origins you need
 ]
 app.add_middleware(
@@ -179,19 +157,17 @@ app.add_middleware(
 )
 
 # Include routes
-app.include_router(router)
 app.include_router(ai_document.router)
-app.include_router(ai_voice.router)
-app.include_router(call_routing.router)
 app.include_router(connect_ai_agent_with_twilio.router)
 app.include_router(ai_agent.router)
 app.include_router(ai_call_log_webhook.router)
+app.include_router(server_tools.router)
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "main:app", 
-        port=9000, 
+        "inbound_service.main:app", 
+        port=8000, 
         workers=1,
         reload=True,
         log_level="info"

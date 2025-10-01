@@ -1,14 +1,16 @@
 version: '3.8'
 
 services:
-  # Main FastAPI Application
-  callcenter-api:
+  # Inbound Service
+  inbound-service:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: callcenter-api
+      args:
+        SERVICE_TYPE: inbound
+    container_name: callcenter-inbound
     ports:
-      - "9050:9050"
+      - "8000:8000"
     env_file:
       - .env
     environment:
@@ -18,13 +20,52 @@ services:
       TWILIO_API_SECRET: ${TWILIO_API_SECRET}
       TWILIO_APP_SID: ${TWILIO_APP_SID}
       ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY}
+      ELEVENLABS_WEBHOOK: ${ELEVENLABS_WEBHOOK}
+      VOICE_ID: ${VOICE_ID}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
       WEBHOOK_URL: ${WEBHOOK_URL}
-      MONGODB_URL: "mongodb+srv://noyonsaha001:nmnjwIca54FXEmGO@cluster0.foguvuz.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-      MONGO_DB_NAME: "uprankedmartin-calling"
+      MONGODB_URL: ${MONGODB_URL}
+      MONGO_DB_NAME: ${MONGO_DB_NAME}
       REDIS_URL: "redis://redis:6379"
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      INSTANCE_ID: "1"
+      INSTANCE_ID: "inbound-1"
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - callcenter-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Outbound Service
+  outbound-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_TYPE: outbound
+    container_name: callcenter-outbound
+    ports:
+      - "8500:8500"
+    env_file:
+      - .env
+    environment:
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_API_KEY: ${TWILIO_API_KEY}
+      TWILIO_API_SECRET: ${TWILIO_API_SECRET}
+      TWILIO_APP_SID: ${TWILIO_APP_SID}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY}
+      ELEVENLABS_WEBHOOK: ${ELEVENLABS_WEBHOOK}
+      VOICE_ID: ${VOICE_ID}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      WEBHOOK_URL: ${WEBHOOK_URL}
+      MONGODB_URL: ${MONGODB_URL}
+      MONGO_DB_NAME: ${MONGO_DB_NAME}
+      REDIS_URL: "redis://redis:6379"
+      INSTANCE_ID: "outbound-1"
     depends_on:
       - redis
     restart: unless-stopped
@@ -50,7 +91,7 @@ services:
     command: >
       redis-server
       --save 60 1000
-      --maxmemory 128mb
+      --maxmemory 256mb
       --maxmemory-policy allkeys-lru
       --appendonly yes
       --auto-aof-rewrite-percentage 100
@@ -68,3 +109,6 @@ volumes:
 networks:
   callcenter-network:
     driver: bridge
+
+
+    

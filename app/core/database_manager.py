@@ -1,8 +1,11 @@
+# app/core/database_manager.py
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-from pymongo import IndexModel
+from pymongo import IndexModel, ASCENDING
+from pymongo.errors import OperationFailure
 from bson import ObjectId
 import logging
 from typing import Optional
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +29,7 @@ class DatabaseManager:
             )
             
             # Get database name from URL
-            db_name = "uprankedmartin-calling"
+            db_name = settings.MONGO_DB_NAME
             self.db = self.client[db_name]
             
             # Test connection
@@ -46,36 +49,52 @@ class DatabaseManager:
             self.client.close()
     
     async def ensure_indexes(self):
-        """Ensure all required indexes exist"""
+        """Ensure database indexes exist - creates them if they don't exist"""
         try:
-            # Agents collection indexes
-            await self.db.agents.create_indexes([
-                IndexModel([("userId", 1)], unique=True, name="agents_userId_key"),
-                IndexModel([("status", 1)]),
-                IndexModel([("sip_username", 1)]),
-                IndexModel([("assignTo", 1)]),
-                IndexModel([("last_activity", 1)])
-            ])
+            # Services collection indexes
+            try:
+                await self.db.services.create_index([("phoneNumber", ASCENDING)], background=True)
+                await self.db.services.create_index([("serviceName", ASCENDING)], background=True)
+            except OperationFailure as e:
+                logger.warning(f"Services index creation issue (may already exist): {e}")
             
-            # Subscriptions collection indexes
-            await self.db.subscriptions.create_indexes([
-                IndexModel([("purchasedNumber", 1)]),
-                IndexModel([("organizationId", 1)]),
-                IndexModel([("status", 1)]),
-                IndexModel([("purchasedNumber", 1), ("status", 1)])
-            ])
+            # AI agents collection indexes
+            try:
+                await self.db.aiagents.create_index([("serviceId", ASCENDING)], background=True)
+                await self.db.aiagents.create_index([("agentId", ASCENDING)], background=True)
+            except OperationFailure as e:
+                logger.warning(f"AI agents index creation issue (may already exist): {e}")
             
-            # Call logs collection indexes (for future use)
-            await self.db.call_logs.create_indexes([
-                IndexModel([("call_id", 1)], unique=True),
-                IndexModel([("agent_id", 1)]),
-                IndexModel([("start_time", 1)]),
-                IndexModel([("organization_id", 1)]),
-                IndexModel([("status", 1)])
-            ])
+            # Knowledge base collection indexes
+            try:
+                await self.db.AiknowledgeBase.create_index([("serviceId", ASCENDING)], background=True)
+                await self.db.AiknowledgeBase.create_index([("knowledgeBaseId", ASCENDING)], background=True)
+            except OperationFailure as e:
+                logger.warning(f"Knowledge base index creation issue (may already exist): {e}")
             
-            logger.info("Database indexes created successfully")
+            # Call log collection indexes
+            try:
+                await self.db.AICallLog.create_index([("call_sid", ASCENDING)], background=True)
+                await self.db.AICallLog.create_index([("agent_id", ASCENDING)], background=True)
+                await self.db.AICallLog.create_index([("serviceId", ASCENDING)], background=True)
+            except OperationFailure as e:
+                logger.warning(f"Call log index creation issue (may already exist): {e}")
+            
+            # Batch jobs collection indexes (for outbound service)
+            try:
+                await self.db.batch_jobs.create_index([("status", ASCENDING)], background=True)
+                await self.db.batch_jobs.create_index([("start_time", ASCENDING)], background=True)
+            except OperationFailure as e:
+                logger.warning(f"Batch jobs index creation issue (may already exist): {e}")
+            
+            # Tools collection indexes
+            try:
+                await self.db.tools.create_index([("tool_id", ASCENDING)], background=True)
+            except OperationFailure as e:
+                logger.warning(f"Tools index creation issue (may already exist): {e}")
+            
+            logger.info("Database indexes ensured successfully")
             
         except Exception as e:
-            logger.error(f"Failed to create indexes: {e}")
-            raise
+            logger.error(f"Failed to ensure indexes: {e}")
+            # Don't raise - allow app to continue even if indexes fail

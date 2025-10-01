@@ -1,3 +1,4 @@
+#app/core/config.py
 import os
 from pydantic_settings import BaseSettings
 
@@ -12,35 +13,25 @@ class Settings(BaseSettings):
     # Elevenlabs
     ELEVENLABS_API_KEY: str = os.getenv("ELEVENLABS_API_KEY","")
     ELEVENLABS_WEBHOOK: str = os.getenv("ELEVENLABS_WEBHOOK","")
+    VOICE_ID: str = os.getenv("VOICE_ID","")
 
     # Open AI Key
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 
     # Web hooks
-    WEBHOOK_URL: str = os.getenv("WEBHOOK_URL", "")
+    WEBHOOK_URL: str = os.getenv("WEBHOOK_URL", "") #ngrok url
     
     # Database
-    MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://admin:password123@localhost:27017/callcenter?authSource=admin")
-    MONGO_DB_NAME: str = os.getenv("MONGO_DB_NAME", "uprankedmartin-calling")
+    MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017/")
+    MONGO_DB_NAME: str = os.getenv("MONGO_DB_NAME", "booking")
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
-    
-    # JWT
-    JWT_ACCESS_SECRET: str = os.getenv("JWT_ACCESS_SECRET", "your_login_server_jwt_secret_here")
-    JWT_REFRESH_SECRET: str = os.getenv("JWT_REFRESH_SECRET", "kPzM8wLtYbNe5qRaDf9XvJhKiCG30AMuTrhWcs7yBoVxdQnE2LgFZSa1ipOmHTKU")
-    JWT_ALGORITHM: str = "HS256"
-    
-    # Instance
-    INSTANCE_ID: str = os.getenv("INSTANCE_ID", "1")
 
-    BASE_URL: str = os.getenv("BASE_URL", "")
-    HEALTH_CHECK_INTERVAL: int = 300
-    MAX_CONSECUTIVE_FAILURES: int = 3
-    WEBHOOK_TIMEOUT: int = 15
-
-    # Lead Generation API
-    LEAD_GENERATION_API_URL: str = os.getenv("LEAD_GENERATION_API_URL", "")
+    MEETING_UPDATE_URL:str=os.getenv("meeting_update_url","")
+    
+    INSTANCE_ID: str = os.getenv("INSTANCE_ID", "instance-1")
     
     class Config:
         env_file = ".env"
 
 settings = Settings()
+

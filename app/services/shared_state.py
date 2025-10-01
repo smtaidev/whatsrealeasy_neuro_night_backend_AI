@@ -1,3 +1,5 @@
+#app/services/shared_state.py
+
 from typing import Optional
 from fastapi import HTTPException
 
@@ -18,3 +20,4 @@ def get_shared_state(app) -> SharedState:
             detail="Application not properly initialized"
         )
     return app.state.shared_state
+
