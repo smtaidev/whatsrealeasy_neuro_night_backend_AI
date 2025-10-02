@@ -255,7 +255,7 @@ async def handle_post_call_transcription(request: Request):
         end_time = meeting_time_obj + timedelta(hours=1)
 
         async with httpx.AsyncClient() as client:
-            meeting_set_url =f"https://whats-real-easy-production.up.railway.app/api/v1/appointments"
+            meeting_set_url =f"https://api.advanceaimarketing.cloud/api/v1/appointments"
             # meeting_time_obj = datetime.fromisoformat(meeting_time)
             response = await client.post(
                 meeting_set_url,
