@@ -56,6 +56,7 @@ async def assign_phone_to_agent(assignment: PhoneAssignment, db=Depends(get_data
                 json=payload,
                 headers=headers
             )
+            print(f"\n\n twilio connection response: {response.json()}\n\n")
 
             if response.status_code not in (200, 201):
                 raise HTTPException(
@@ -65,7 +66,6 @@ async def assign_phone_to_agent(assignment: PhoneAssignment, db=Depends(get_data
 
             phone_data = response.json()
 
-            print(f"\n\n twilio connection response: {phone_data}\n\n")
             
             phone_number_id = phone_data.get("phone_number_id")
             if not phone_number_id:
