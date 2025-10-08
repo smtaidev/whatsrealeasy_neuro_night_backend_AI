@@ -518,7 +518,12 @@ async def update_agent(
 
     await db.aiagents.update_one(
         {"agentId": agentId},
-        {"$set": {"updatedAt": datetime.utcnow()}}
+        {
+            "$set": {
+                "first_message": firstMessage,
+                "updatedAt": datetime.utcnow()
+            }
+        }
     )
 
     return {
