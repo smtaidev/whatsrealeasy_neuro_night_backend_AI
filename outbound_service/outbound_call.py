@@ -3,6 +3,7 @@
 
 import asyncio
 from datetime import datetime, timezone
+import re
 from zoneinfo import ZoneInfo
 import logging
 import math
@@ -57,7 +58,8 @@ async def process_numbers(
         else:
             raise HTTPException(status_code=400, detail="Unsupported file type. Only .csv, .xls and .xlsx are allowed.")
         
-        df['phoneNumbers'] = df['phoneNumbers'].dropna().reset_index(drop=True)
+        df['phoneNumbers'] = df['phoneNumbers'].dropna().astype(str).reset_index(drop=True)
+        df['phoneNumbers'] = df['phoneNumbers'].apply(clean_phone_number)
 
         
     except Exception as e:
@@ -150,6 +152,17 @@ async def run_batch_job(df, batch_size, agent, service, starting_time, call_dura
         })
 
         logger.info(f"Job {job_id} completed. {total_count} phone numbers processed.")
+
+def clean_phone_number(number: str) -> str:
+    # Remove all characters except digits and '+'
+    number = re.sub(r"[^\d+]", "", number)
+
+    # Ensure the number starts with '+'
+    if not number.startswith('+'):
+        number = '+' + number.lstrip('+')  # Avoid multiple plus signs if malformed
+
+    return number
+
 
 
 @router.get("/batch-job-status/")
