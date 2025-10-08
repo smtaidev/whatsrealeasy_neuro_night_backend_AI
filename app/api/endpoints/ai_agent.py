@@ -41,9 +41,7 @@ async def create_service(
         return JSONResponse(
         status_code=200,
         content={
-            "message": f"service already exists with that phone number {phoneNumber}",
-            "db_record": check_phone_number,
-            "elevenlabs_response": "No elevenlabs data available as the agent is already created"
+            "message": f"service already exists with that phone number {phoneNumber}"
         }
     )
 
