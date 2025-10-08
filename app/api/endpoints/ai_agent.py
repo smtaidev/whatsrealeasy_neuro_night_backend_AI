@@ -36,7 +36,7 @@ async def create_service(
     phoneNumber:str,
     db=Depends(get_database)
 ):
-    check_phone_number = await db.services.find_one({"phone_Number":phoneNumber})
+    check_phone_number = await db.services.find_one({"phoneNumber":phoneNumber})
     if check_phone_number is not None:
         return JSONResponse(
         status_code=200,
