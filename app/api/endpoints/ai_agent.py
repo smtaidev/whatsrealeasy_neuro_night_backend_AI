@@ -1,7 +1,7 @@
 # app/api/endpoints/ai_agent.py
 
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from typing import Optional, List
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -102,6 +102,57 @@ async def create_service(
             status_code=500,
             content={"error": True, "message": str(e)}
         )
+    
+@router.patch("/update-service/")
+async def update_service(
+    service_id: str,
+    serviceName: str = Body(None),
+    phoneNumber: str = Body(None),
+    db=Depends(get_database)
+):
+    # Find the service
+    check_service = await db.services.find_one({"_id": ObjectId(service_id)})
+    if check_service is None:
+        return JSONResponse(
+            status_code=404,
+            content={"message": "Service not found"}
+        )
+
+    update_fields = {}
+    if serviceName:
+        update_fields["serviceName"] = serviceName
+    if phoneNumber:
+        update_fields["phoneNumber"] = phoneNumber
+
+    if not update_fields:
+        return JSONResponse(
+            status_code=400,
+            content={"message": "No fields provided for update"}
+        )
+
+    update_fields["updatedAt"] = now_utc()
+
+    # Perform update
+    await db.services.update_one(
+        {"_id": ObjectId(service_id)},
+        {"$set": update_fields}
+    )
+
+    # Fetch the updated record
+    updated_record = await db.services.find_one({"_id": ObjectId(service_id)})
+    updated_record["_id"] = str(updated_record["_id"])
+    updated_record["createdAt"] = updated_record["createdAt"].isoformat()
+    updated_record["updatedAt"] = updated_record["updatedAt"].isoformat()
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "message": "Service updated successfully",
+            "db_record": updated_record
+        }
+    )
+
+    
 
 # ----------------------------
 # Helper: Fetch service by ID
